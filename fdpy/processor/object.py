@@ -4,13 +4,7 @@ from logging import INFO
 
 
 @dataclass
-class BaseData:
-    """"""
-    gateway_name: str
-
-
-@dataclass
-class LogData(BaseData):
+class LogData:
     """
     Log data is used for recording log messages on GUI or in log files
     """

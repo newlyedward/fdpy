@@ -17,10 +17,11 @@ class Event:
     and a data object which contains the real data.
     """
 
-    def __init__(self, type: str, data: Any = None):
+    def __init__(self, type: str, data: Any = None, callback: Callable[[], None] = None):
         """"""
         self.type = type
         self.data = data
+        self.callback = callback
 
 
 HandlerType = Callable[[Event], None]
@@ -106,6 +107,7 @@ class EventEngine:
         :param event:
         :return:
         """
+        self._queue.put(event)
 
     def register(self, type: str, handler: HandlerType):
         """

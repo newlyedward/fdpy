@@ -1,31 +1,79 @@
 import logging
-from abc import ABC
 from datetime import datetime
 from typing import Any
 
+from fdpy import database
 from fdpy.event import EventEngine, Event
+from .app import BaseApp
+from .object import LogData
 from .event import EVENT_LOG
 from .utility import get_folder_path
 from .setting import SETTINGS
 
 
-class MainEngine:
+class BaseEngine:
     """
-    Acts as the core engine.
+    Abstract class for implementing an function engine.
     """
 
-    def __init__(self, event_engine: EventEngine = None):
+    def __init__(
+            self,
+            main_engine: Any,
+            event_engine: EventEngine,
+            engine_name: str,
+    ):
         """"""
+        self.main_engine = main_engine
+        self.engine_name = engine_name
+
         if event_engine:
             self.event_engine = event_engine
         else:
             self.event_engine = EventEngine()
-        self.event_engine.start()
 
-        self.gateways = {}
+    def init_engine(self):
+        """"""
+        pass
+
+    def start_engine(self):
+        """"""
+        pass
+
+    def close_engine(self):
+        """"""
+        pass
+
+    def register_event(self):
+        """"""
+        pass
+
+    def process_event(self, event: Event):
+        """"""
+        pass
+
+    def write_log(self, msg: str):
+        """
+        Put log event with specific message.
+        :param msg:
+        :return:
+        """
+        log = LogData(msg=msg)
+        event = Event(EVENT_LOG, log)
+        self.event_engine.put(event)
+
+
+class MainEngine(BaseEngine):
+    """
+    Acts as the core engine.
+    """
+
+    def __init__(self, event_engine=EventEngine):
+        """"""
+        super(MainEngine, self).__init__(self, event_engine, "main")
+
         self.engines = {}
         self.apps = {}
-        self.exchanges = []
+        self.db = database.connect('finance')
 
         self.init_engines()
 
@@ -46,40 +94,58 @@ class MainEngine:
         """
         self.add_engines(LogEngine)
 
-    def write_log(self, msg: str, source: str = ""):
+    def start_engine(self):
+        """"""
+        self.event_engine.start()
+
+    def write_log(self, msg: str):
         """
         Put log event with specific message.
         :param msg:
-        :param source:
         :return:
         """
-        log = LogData
+        log = LogData(msg=msg)
+        event = Event(EVENT_LOG, log)
+        self.event_engine.put(event)
 
+    def get_engine(self, engine_name: str):
+        """
+        Return engine object by name.
+        :param engine_name:
+        :return:
+        """
+        engine = self.engines.get(engine_name, None)
+        if not engine:
+            self.write_log(f"Can't find engine: {engine_name}")
+        return engine
 
-class BaseEngine(ABC):
-    """
-    Abstract class for implementing an function engine.
-    """
+    def add_app(self, app_class: BaseApp):
+        """
+        Add app.
+        :param app_class:
+        :return:
+        """
+        app = app_class()
+        self.apps[app.app_name] = app
 
-    def __init__(
-            self,
-            main_engine: MainEngine,
-            event_engine: EventEngine,
-            engine_name: str,
-    ):
-        """"""
-        self.main_engine = main_engine
-        self.event_engine = event_engine
-        self.engine_name = engine_name
+        engine = self.add_engine(app.engine_class)
+        return engine
 
-    def close(self):
-        """"""
-        pass
+    def close_engine(self):
+        """
+        Make sure every gateway and app is closed properly before
+        programme exit.
+        """
+        # Stop event engine first to prevent new timer event.
+        self.event_engine.stop()
+
+        for engine in self.engines.values():
+            engine.close_egine()
 
 
 class LogEngine(BaseEngine):
     """
-    Porcess log event and output with logging module.
+    Process log event and output with logging module.
     """
 
     def __init__(
@@ -89,7 +155,7 @@ class LogEngine(BaseEngine):
     ):
         super(LogEngine, self).__init__(main_engine, event_engine, "log")
 
-        if SETTINGS["log.active"]:
+        if not SETTINGS["log.active"]:
             return
 
         self.level = SETTINGS["log.level"]
@@ -98,7 +164,7 @@ class LogEngine(BaseEngine):
         self.logger.setLevel(self.level)
 
         self.formatter = logging.Formatter(
-            "%(asctime) %(levelname)s: %(message)s"
+            "%(asctime)s %(levelname)s: %(message)s"
         )
 
         self.add_null_handler()
@@ -107,7 +173,7 @@ class LogEngine(BaseEngine):
             self.add_console_handler()
 
         if SETTINGS["log.file"]:
-            self.add_console_handler()
+            self.add_file_handler()
 
         self.register_event()
 
@@ -144,9 +210,9 @@ class LogEngine(BaseEngine):
 
     def register_event(self):
         """"""
-        self.event_engine.register(EVENT_LOG, self.process_log_event)
+        self.event_engine.register(EVENT_LOG, self.process_event)
 
-    def process_log_event(self, event:Event):
+    def process_event(self, event: Event):
         """
         Process log event.
         :param event:
@@ -154,4 +220,3 @@ class LogEngine(BaseEngine):
         """
         log = event.data
         self.logger.log(log.level, log.msg)
-

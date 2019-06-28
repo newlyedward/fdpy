@@ -1,4 +1,6 @@
+import json
 from pathlib import Path
+from typing import Any
 
 
 def _get_processor_dir(temp_name: str):
@@ -29,6 +31,13 @@ def _get_processor_dir(temp_name: str):
 PROCESSOR_DIR, TEMP_DIR = _get_processor_dir(".fdprocessor")
 
 
+def get_file_path(filename: str):
+    """
+    Get path for temp file with filename.
+    """
+    return TEMP_DIR.joinpath(filename)
+
+
 def get_folder_path(folder_name: str):
     """
     Get path for temp file with filename.
@@ -41,3 +50,38 @@ def get_folder_path(folder_name: str):
         folder_path.mkdir()
 
     return folder_path
+
+
+def load_json(filename: Any):
+    """
+    Load data from json file in temp path.
+    :param filename: str or Path
+    """
+    if isinstance(filename, str):
+        filepath = get_file_path(filename)
+    elif isinstance(filename, Path):
+        filepath = filename
+    else:
+        return {}
+
+    if filepath.exists():
+        with open(filepath, mode="r", encoding="UTF-8") as f:
+            data = json.load(f)
+        return data
+    else:
+        save_json(filename, {})
+        return {}
+
+
+def save_json(filename: str, data: dict):
+    """
+    Save data into json file in temp path.
+    """
+    filepath = get_file_path(filename)
+    with open(filepath, mode="w+", encoding="UTF-8") as f:
+        json.dump(
+            data,
+            f,
+            indent=4,
+            ensure_ascii=False
+        )
